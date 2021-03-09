@@ -78,7 +78,7 @@ def train_for_epoch(model, dataloader, optimizer, device):
     # try "del F, F_lens, E, logits, loss" at the end of each iteration of
     # the loop.
     lossModel = torch.nn.CrossEntropyLoss(ignore_index=model.source_pad_id)
-    totalLoss = 0
+    totalLoss = 0.0
     count = 0
     for F, F_lens, E in dataloader:
         F = F.to(device)
@@ -86,17 +86,16 @@ def train_for_epoch(model, dataloader, optimizer, device):
         E = E.to(device)
         optimizer.zero_grad()
         logits = model(F, F_lens, E)
-        E = E[:-1]
         mask = model.get_target_padding_mask(E)
         E = E.masked_fill(mask, model.source_pad_id)
-        logits = torch.flatten(logits, start_dim=0, end_dim=1)
-        E = torch.flatten(E, start_dim=0, end_dim = 1)
+        logits = torch.flatten(logits, start_dim=0, end_dim=-2)
+        E = torch.flatten(E[1:], start_dim=0)
         loss = lossModel(logits, E)
         loss.backward()
         optimizer.step()
         totalLoss += loss.item()
-        del F, F_lens, E, logits, loss
         count += 1
+        del F, F_lens, E, logits, loss
     return totalLoss / count
 
 def compute_batch_total_bleu(E_ref, E_cand, target_sos, target_eos):
