@@ -84,7 +84,7 @@ class Encoder(EncoderBase):
         #   torch.nn.utils.rnn.{pad_packed,pack_padded}_sequence
         X = torch.nn.utils.rnn.pack_padded_sequence(x, F_lens, enforce_sorted = False)
         output, hidden = self.rnn(X)
-        return torch.nn.utils.rnn.pad_packed_sequence(output, padding_value=h_pad)
+        return torch.nn.utils.rnn.pad_packed_sequence(output, padding_value=h_pad)[0]
 
 
 class DecoderWithoutAttention(DecoderBase):
