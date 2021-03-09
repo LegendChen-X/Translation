@@ -40,7 +40,7 @@ def grouper(seq, n):
     ngrams = []
     length = len(seq)
     for i in range(length):
-        if (i + n - 1) < length: ngrams.append()
+        if (i + n - 1) < length: ngrams.append(seq[i:i+n])
     return ngrams
 
 
