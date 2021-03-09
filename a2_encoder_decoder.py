@@ -171,8 +171,8 @@ class DecoderWithoutAttention(DecoderBase):
         #   htilde_tm1 is of shape (M, 2 * H) or a tuple of two of those (LSTM)
         #   htilde_t (output) is of same shape as htilde_tm1
         if self.cell_type == "lstm":
-            return self.cell(xtilde_t, htilde_tm1[0])
-        return self.cell(xtilde_t, htilde_tm1)
+            return self.cell(xtilde_t, (htilde_tm1[0][:, :self.hidden_state_size], htilde_tm1[1][:, :self.hidden_state_size]))
+        return self.cell(xtilde_t, htilde_tm1[:, :self.hidden_state_size])
             
     def get_current_logits(self, htilde_t):
         # Recall:
