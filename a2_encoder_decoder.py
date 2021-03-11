@@ -217,6 +217,7 @@ class DecoderWithAttention(DecoderWithoutAttention):
 
     def get_current_rnn_input(self, E_tm1, htilde_tm1, h, F_lens):
         # Hint: Use attend() for c_t
+        if self.cell_type == 'lstm': htilde_tm1 = htilde_tm1[0]
         return torch.cat((self.embedding(E_tm1), self.attend(htilde_tm1, h, F_lens)), dim=1)
 
     def attend(self, htilde_t, h, F_lens):
@@ -248,8 +249,8 @@ class DecoderWithAttention(DecoderWithoutAttention):
         '''
         alpha_t = self.get_attention_weights(htilde_t, h, F_lens)
         alpha_t = alpha_t.transpose(0, 1).unsqueeze(2)
-        return torch.bmm(h.permute(1, 2, 0), alpha_t).squeeze()
-        
+        c_t = torch.bmm(h.permute(1, 2, 0), alpha_t).squeeze()
+        return c_t
 
     def get_attention_weights(self, htilde_t, h, F_lens):
         # DO NOT MODIFY! Calculates attention weights, ensuring padded terms
@@ -257,8 +258,13 @@ class DecoderWithAttention(DecoderWithoutAttention):
         # get_energy_scores()
         # alpha_t (output) is of shape (S, M)
         e_t = self.get_energy_scores(htilde_t, h)
+        #print("e_t", e_t.size())
         pad_mask = torch.arange(h.shape[0], device=h.device)
+        #print("Shape of pad",pad_mask.size())
+        #print("Shape of pad unsq",pad_mask.unsqueeze(-1).size())
+        #print("Shape of F_len", F_lens.size())
         pad_mask = pad_mask.unsqueeze(-1) >= F_lens  # (S, M)
+        #print("Shape of mask", pad_mask.size())
         e_t = e_t.masked_fill(pad_mask, -float('inf'))
         return torch.nn.functional.softmax(e_t, 0)
 
@@ -271,6 +277,10 @@ class DecoderWithAttention(DecoderWithoutAttention):
         # Hint:
         # Relevant pytorch function: torch.nn.functional.cosine_similarity
         cosine_similarity = torch.nn.CosineSimilarity(dim=2)
+        #print("get_energy_scores",h.size())
+        #print("get_energy_scores",htilde_t.size())
+        #print(htilde_t.unsqueeze(0).size())
+        if self.cell_type == "lstm": return cosine_similarity(h, htilde_t[0].unsqueeze(0))
         return cosine_similarity(h, htilde_t.unsqueeze(0))
 
 class DecoderWithMultiHeadAttention(DecoderWithAttention):
@@ -295,7 +305,10 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         #    should not be lists!
         # 5. You do *NOT* need self.heads at this point
         # 6. Relevant pytorch module: torch.nn.Linear (note: set bias=False!)
-        assert False, "Fill me"
+        self.W = torch.nn.Linear(self.hidden_state_size, self.hidden_state_size, bias=False)
+        self.Wtilde = torch.nn.Linear(self.hidden_state_size, self.hidden_state_size, bias=False)
+        self.Q = torch.nn.Linear(self.hidden_state_size, self.hidden_state_size, bias=False)
+        
 
     def attend(self, htilde_t, h, F_lens):
         # Hints:
@@ -308,7 +321,65 @@ class DecoderWithMultiHeadAttention(DecoderWithAttention):
         #   tensor([1,2,3,4]).repeat_interleave(2) will output
         #   tensor([1,1,2,2,3,3,4,4]), just like numpy.repeat.
         # 4. You *WILL* need self.heads at this point
-        assert False, "Fill me"
+        
+        h_tm1 = self.Wtilde(htilde_t).repeat_interleave(self.heads)
+        h_tm1 = h_tm1.view(htilde_t.size()[0], self.heads, -1)
+        h_ = self.W(h).repeat_interleave(self.heads)
+        h_ = h_.view(h.size()[0], h.size()[1], self.heads, -1)
+        result = super().attend(h_tm1[:, 0, :],
+             h_[:, :, 0, :],
+             F_lens).unsqueeze(1)
+        for i in range(1, self.heads):
+            result = torch.cat((result, super().attend(h_tm1[:, i, :],
+             h_[:, :, i, :],
+             F_lens).unsqueeze(1)), 1)
+        #print("result size", result.size())
+        res = torch.sum(self.Q(result),1)
+        #print("res size", res.size())
+        return res
+        '''
+        h_tm1 = self.Wtilde(htilde_t).repeat_interleave(self.heads)
+        h_tm1 = h_tm1.view(htilde_t.size()[0], -1, self.heads)
+        h_ = self.W(h).repeat_interleave(self.heads)
+        h_ = h_.view(h.size()[0], h.size()[1], -1, self.heads)
+        print(h_tm1.size())
+        print(h_.size())
+        print(F_lens.size())
+        F_lens1 = F_lens.repeat_interleave(self.heads).view(-1, self.heads)
+        result = super().attend(h_tm1, h_, F_lens1.unsqueeze(1))
+        result = result.sum(dim=0)
+        return self.Q(result)
+        
+        seq_size, batch_size, hidden_size = h.size()
+        h_tm1 = self.Wtilde(htilde_t).repeat_interleave(self.heads)
+    
+        h_ = self.W(h).repeat_interleave(self.heads)
+        h_ = h_.view(batch_size, self.heads, hidden_size, seq_size)
+        print(h_tm1.size())
+        print(h_.size())
+        print(F_lens.size())
+        F_lens1 = F_lens.repeat_interleave(self.heads).view(-1, self.heads)
+        result = super().attend(h_tm1, h_, F_lens1)
+        result = result.sum(dim=0)
+        return self.Q(result)
+        
+        S, M, _ = h.size()
+        new_h = self.W(h)
+        new_h = new_h.view(S, M*self.heads, -1)
+        print(new_h.size())
+        if self.cell_type == "lstm":
+            new_htilde_t = (self.Wtilde(htilde_t[0]), htilde_t[1])
+            new_htilde_t = (new_htilde_t[0].view(M*self.heads, -1), new_htilde_t[1].view(M*self.heads, -1))
+        else:
+            new_htilde_t = self.Wtilde(htilde_t)
+            new_htilde_t = new_htilde_t.view(M*self.heads, -1)
+        new_F_lens = F_lens.repeat_interleave(repeats=self.heads)
+        c_t = super().attend(new_htilde_t, new_h, new_F_lens)
+        c_t = c_t.view(M,-1)
+        print(c_t.size())
+        return self.Q(c_t)
+        '''
+        
 
 class EncoderDecoder(EncoderDecoderBase):
 
@@ -327,7 +398,7 @@ class EncoderDecoder(EncoderDecoderBase):
         #   never need an embedding for it
         self.encoder = encoder_class(self.source_vocab_size, self.source_pad_id, self.word_embedding_size, self.encoder_num_hidden_layers, self.encoder_hidden_size, self.encoder_dropout, self.cell_type)
         
-        self.decoder = decoder_class(self.target_vocab_size, self.target_eos, self.word_embedding_size, self.encoder_hidden_size * 2, self.cell_type)
+        self.decoder = decoder_class(self.target_vocab_size, self.target_eos, self.word_embedding_size, self.encoder_hidden_size * 2, self.cell_type, self.heads)
 
     def get_logits_for_teacher_forcing(self, h, F_lens, E):
         # Recall:
@@ -375,11 +446,13 @@ class EncoderDecoder(EncoderDecoderBase):
         paths = torch.div(v, V)
         v = torch.remainder(v, V)
         b_tm1_1 = b_tm1_1.gather(2, paths.unsqueeze(0).expand_as(b_tm1_1))
-        if self.cell_type == 'lstm':
-            b_t_0 = (htilde_t[0].gather(1, paths.unsqueeze(-1).expand_as(htilde_t[0])), htilde_t[1].gather(1, paths.unsqueeze(-1).expand_as(htilde_t[1])))
-        else:
-            b_t_0 = htilde_t.gather(1, paths.unsqueeze(-1).expand_as(htilde_t))
         v = v.unsqueeze(0)
         b_t_1 = torch.cat([b_tm1_1, v], dim=0)
+        if self.cell_type == 'lstm':
+            first_element = htilde_t[0].gather(1, paths.unsqueeze(-1).expand_as(htilde_t[0]))
+            second_element = htilde_t[1].gather(1, paths.unsqueeze(-1).expand_as(htilde_t[1]))
+            b_t_0 = (first_element, second_element)
+        else:
+            b_t_0 = htilde_t.gather(1, paths.unsqueeze(-1).expand_as(htilde_t))
         return b_t_0, b_t_1, logpb_t
         
