@@ -124,8 +124,14 @@ def compute_batch_total_bleu(E_ref, E_cand, target_sos, target_eos):
     # of numbers
     total_bleu = 0.0
     for i in range(E_ref.shape[1]):
-        reference = [j for j in E_ref[:, i].tolist() if j != target_sos and j != target_eos]
-        candidate = [j for j in E_cand[:, i].tolist() if j != target_sos and j != target_eos]
+        reference = []
+        candidate = []
+        for j in E_ref[:, i].tolist():
+            if j != target_sos and j != target_eos:
+                reference.append(j)
+        for j in E_cand[:, i].tolist():
+            if j != target_sos and j != target_eos:
+                candidate.append(j)
         total_bleu += a2_bleu_score.BLEU_score(reference, candidate, 4)
     return total_bleu
 
@@ -173,6 +179,6 @@ def compute_average_bleu_over_dataset(
         b_1 = model(F, F_lens)
         E_cand = b_1[..., 0]
         total_bleu += compute_batch_total_bleu(E_ref, E_cand, target_sos, target_eos)
-        num_seq += F_lens.size(0)
+        num_seq += F_lens.size()[0]
     return total_bleu / num_seq
         
