@@ -88,7 +88,7 @@ def train_for_epoch(model, dataloader, optimizer, device):
         logits = model(F, F_lens, E)
         mask = model.get_target_padding_mask(E)
         E = E.masked_fill(mask, model.source_pad_id)
-        logits = torch.flatten(logits, start_dim=0, end_dim=-2)
+        logits = torch.flatten(logits, start_dim=0, end_dim=1)
         E = torch.flatten(E[1:], start_dim=0)
         loss = lossModel(logits, E)
         loss.backward()

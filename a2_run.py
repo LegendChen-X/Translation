@@ -375,7 +375,7 @@ def add_common_model_options(parser):
         help='The number of hidden layers in the encoder'
     )
     parser.add_argument(
-        '--cell-type', choices=['lstm', 'gru', 'rnn'], default='lstm',
+        '--cell-type', choices=['lstm', 'gru', 'rnn'], default='gru',
         help='What recurrent architecture to use in both the encoder and '
         'decoder'
     )
