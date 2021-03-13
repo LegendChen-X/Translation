@@ -46,8 +46,13 @@ Epoch 5: loss=1.2026123186510755, BLEU=0.3145409176635263
 The average BLEU score over the test set was 0.3609300088313765
 
 Model With Multi-Head Attention:
-No resources for me to train.
+Epoch 1: loss=3.3136787551825413, BLEU=0.27303796395278906
+Epoch 2: loss=2.2617031627951105, BLEU=0.2918940827230101
+Epoch 3: loss=1.908441618146681, BLEU=0.30057310121502934
+Epoch 4: loss=1.6955352486250643, BLEU=0.30414916215128684
+Epoch 5: loss=1.5577980864163314, BLEU=0.30642043957196385
 
+The average BLEU score over the test set was 0.35661583382903195
 
 ---------LSTM---------
 Model Without Attention:
